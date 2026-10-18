@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="계기판">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>계기판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Varela+Round&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c1:#ffa347; --c2:#ff7a1a; --sig:#ff8a1f;
+  --bg:#e9e8ec; --face:#f6f4fa; --fg:#17171a; --muted:#85848c; --num:#8d8b94; --tick:rgba(30,30,45,.5);
+  --glass:rgba(255,255,255,.6); --glass-line:rgba(0,0,0,.07);
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  padding-left:env(safe-area-inset-left,0px); padding-right:env(safe-area-inset-right,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#000; --face:#16161a; --fg:#f4f2f6; --muted:#8e8c94; --num:#ebe9f0; --tick:rgba(255,255,255,.42);
+    --glass:rgba(255,255,255,.07); --glass-line:rgba(255,255,255,.13)}
+}
+:root[data-theme="dark"]{
+  --bg:#000; --face:#16161a; --fg:#f4f2f6; --muted:#8e8c94; --num:#ebe9f0; --tick:rgba(255,255,255,.42);
+  --glass:rgba(255,255,255,.07); --glass-line:rgba(255,255,255,.13)}
+:root[data-theme="gray"]{
+  --bg:#2c2e32; --face:#3b3e44; --fg:#efeef2; --muted:#a3a5ab; --num:#efeef2; --tick:rgba(255,255,255,.42);
+  --glass:rgba(255,255,255,.09); --glass-line:rgba(255,255,255,.15)}
+:root[data-theme="light"]{
+  --bg:#e9e8ec; --face:#f6f4fa; --fg:#17171a; --muted:#85848c; --num:#8d8b94; --tick:rgba(30,30,45,.5);
+  --glass:rgba(255,255,255,.6); --glass-line:rgba(0,0,0,.07)}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webkit-user-select:none;user-select:none;
+  font-family:"Nunito","Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;font-variant-numeric:tabular-nums}
+.dash{height:100%;display:grid;gap:2vmin;padding:4vmin;
+  grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr auto auto;
+  grid-template-areas:"time gps" "speedo speedo" "weather theme" "music music"}
+#time{grid-area:time}
+#gps{grid-area:gps;justify-self:end;align-self:start}
+#weather{grid-area:weather;justify-self:start;align-self:center}
+#theme{grid-area:theme;justify-self:end;align-self:center}
+#music{grid-area:music}
+.t1{font-size:calc(3vmin + 16px);font-weight:700;letter-spacing:.01em;line-height:1.05}
+.t2{font-size:calc(1.4vmin + 11px);font-weight:700;color:var(--muted);margin-top:.35em;letter-spacing:.03em}
+.w{display:flex;align-items:center;gap:.45em;font-family:"Varela Round","Nunito","Apple SD Gothic Neo",system-ui,sans-serif;font-size:calc(2vmin + 13px);font-weight:400}
+.wi{display:inline-flex;color:var(--muted)}
+.wi svg{width:1.4em;height:1.4em;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.wt{color:var(--num)}
+.gps{display:flex;align-items:center;gap:.5em;font-weight:600;font-size:calc(1.1vmin + 10px);color:var(--muted);letter-spacing:.06em}
+.dot{width:.75em;height:.75em;border-radius:50%;background:#3ddc84}
+#gps{cursor:pointer}
+#gps.weak .dot{background:#ffc83d}
+#gps.bad .dot{background:#ff5a4d}
+#theme{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font:inherit;font-size:22px;line-height:1;color:var(--fg);
+  background:var(--glass);border:1px solid var(--glass-line);cursor:pointer;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+#theme:active{transform:scale(.94)}
+#speedo{grid-area:speedo;place-self:center;--d:min(84vw,50vh);--sw:0;width:var(--d);height:var(--d);position:relative}
+.ring{position:absolute;inset:0;width:100%;height:100%}
+.ring circle{fill:none;stroke:var(--sig);stroke-width:12;stroke-linecap:round}
+.read{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.num{font-size:calc(var(--d)*.36);font-weight:800;line-height:1;letter-spacing:-.03em;color:var(--num)}
+.unit{font-size:calc(var(--d)*.06);font-weight:600;color:var(--muted);letter-spacing:.14em;margin-top:calc(var(--d)*.03)}
+#music{display:flex;align-items:center;gap:3vmin;min-height:calc(9vmin + 36px)}
+.cover{flex:none;width:calc(7vmin + 28px);aspect-ratio:1;border-radius:1.4vmin;display:grid;place-items:center;color:#fff;font-size:calc(3vmin + 12px);
+  background:linear-gradient(135deg,var(--c1),var(--c2))}
+.song{min-width:0}
+.song b{display:block;font-size:calc(1.8vmin + 13px);font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.song span{display:block;font-size:calc(1.3vmin + 11px);font-weight:500;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.15em}
+@media (orientation:landscape){
+  .dash{grid-template-columns:1fr auto 1fr;grid-template-rows:auto 1fr auto;
+    grid-template-areas:"time speedo gps" ". speedo music" "weather speedo theme"}
+  #speedo{--d:min(78vh,44vw)}
+  #music{align-self:center;justify-self:end;flex-direction:column;align-items:flex-start;width:min(100%,calc(14vw + 80px))}
+  .cover{width:100%}
+  .song{width:100%}
+}
+</style>
+</head>
+<body>
+<main class="dash">
+  <div id="time"><div class="t1" id="clock">--:--</div><div class="t2" id="date"></div></div>
+  <div id="gps" class="gps bad"><span class="dot"></span><span id="gpstxt">GPS</span></div>
+  <div id="speedo">
+    <svg class="ring" viewBox="-110 -110 220 220" aria-hidden="true"><circle id="arc" r="100" transform="rotate(135)"/></svg>
+    <div class="read"><div class="num" id="speed">0</div><div class="unit">KM/H</div></div>
+  </div>
+  <div id="weather" class="w"><span class="wt">--°</span></div>
+  <button id="theme" type="button" aria-label="테마 변경">◐</button>
+  <div id="music"><div class="cover">♪</div><div class="song"><b>곡 제목이 여기에 표시됩니다</b><span>가수 이름</span></div></div>
+</main>
+<script>
+(function(){
+  var root=document.documentElement, demo=location.hash==="#demo";
+  var $=function(id){return document.getElementById(id)};
+  /* theme */
+  var themes=["dark","gray","light"],cur=-1;
+  try{cur=themes.indexOf(localStorage.getItem("theme"))}catch(e){}
+  if(cur<0)cur=window.matchMedia("(prefers-color-scheme: dark)").matches?0:2;
+  function apply(){root.setAttribute("data-theme",themes[cur]);try{localStorage.setItem("theme",themes[cur])}catch(e){}}
+  apply();
+  $("theme").addEventListener("click",function(){cur=(cur+1)%3;apply()});
+  /* clock */
+  function tick(){
+    var d=new Date(),p=function(n){return n<10?"0"+n:n};
+    $("clock").textContent=p(d.getHours())+":"+p(d.getMinutes());
+    $("date").textContent=(d.getMonth()+1)+"월 "+d.getDate()+"일 "+"일월화수목금토".charAt(d.getDay())+"요일";
+  }
+  tick();setInterval(tick,10000);
+  /* music area: reserved, hidden until music is connected */
+  if(!demo)$("music").style.visibility="hidden";
+  /* home screen icon */
+  try{
+    var cv=document.createElement("canvas");cv.width=cv.height=180;
+    var x=cv.getContext("2d");x.fillStyle="#000";x.fillRect(0,0,180,180);
+    x.strokeStyle="#ff8a1f";x.lineWidth=16;x.lineCap="round";x.beginPath();
+    x.arc(90,90,56,0.75*Math.PI,1.65*Math.PI);x.stroke();
+    var ic=document.createElement("link");ic.rel="apple-touch-icon";ic.href=cv.toDataURL("image/png");document.head.appendChild(ic);
+  }catch(e){}
+  /* keep screen on */
+  var wl=null;
+  function lock(){
+    if(!("wakeLock" in navigator))return;
+    navigator.wakeLock.request("screen").then(function(l){wl=l;l.addEventListener("release",function(){wl=null})}).catch(function(){});
+  }
+  lock();
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")lock()});
+  document.addEventListener("click",function(){if(!wl)lock()});
+  /* GPS */
+  var target=0,lastFix=0,prev=null,pos=null,denied=false,watchId=null;
+  var gpsEl=$("gps"),gpsTxt=$("gpstxt");
+  function setGps(state,label){gpsEl.className="gps "+state;gpsTxt.textContent=label||"GPS"}
+  function dist(a,b){
+    var R=6371000,r=Math.PI/180,dLat=(b.latitude-a.lat)*r,dLon=(b.longitude-a.lon)*r;
+    var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*r)*Math.cos(b.latitude*r)*Math.sin(dLon/2)*Math.sin(dLon/2);
+    return 2*R*Math.asin(Math.sqrt(h));
+  }
+  function onPos(p){
+    var c=p.coords,v=null;
+    denied=false;lastFix=Date.now();pos={lat:c.latitude,lon:c.longitude};
+    if(typeof c.speed==="number"&&isFinite(c.speed)&&c.speed>=0)v=c.speed*3.6;
+    else if(prev){var dt=(p.timestamp-prev.t)/1000;if(dt>0&&dt<10)v=dist(prev,c)/dt*3.6}
+    prev={lat:c.latitude,lon:c.longitude,t:p.timestamp};
+    target=(v===null||v<2)?0:v;
+    setGps(c.accuracy<=30?"ok":"weak");
+    if(!weatherAt)loadWeather();
+  }
+  function onErr(e){
+    if(e.code===1){denied=true;target=0;setGps("bad","위치 권한 필요")}
+    else setGps("bad");
+  }
+  function startGps(){
+    if(demo||!navigator.geolocation){if(!demo)setGps("bad","GPS 미지원");return}
+    if(watchId!==null)navigator.geolocation.clearWatch(watchId);
+    watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:0,timeout:15000});
+  }
+  startGps();
+  gpsEl.addEventListener("click",startGps);
+  setInterval(function(){
+    if(demo||denied)return;
+    if(Date.now()-lastFix>6000){target=0;setGps("bad")}
+  },1000);
+  if(demo)setGps("ok");
+  /* weather (Open-Meteo, no key) */
+  var weatherAt=0;
+  var P={
+    sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
+    cloud:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
+    part:'<path d="M12 2v2M4.93 4.93l1.41 1.41M20 12h2M19.07 4.93l-1.41 1.41"/><path d="M15.95 12.65a4 4 0 0 0-5.93-4.13"/><path d="M13 22H7a5 5 0 1 1 4.9-6H13a3 3 0 0 1 0 6Z"/>',
+    fog:'<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M16 17H7M17 21H9"/>',
+    drizzle:'<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M8 19v1M8 14v1M16 19v1M16 14v1M12 21v1M12 16v1"/>',
+    rain:'<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M16 14v6M8 14v6M12 16v6"/>',
+    snow:'<path d="M4 14.9A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.24"/><path d="M8 15h.01M8 19h.01M12 17h.01M12 21h.01M16 15h.01M16 19h.01"/>',
+    storm:'<path d="M6 16.33A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 .5 8.97"/><path d="m13 12-3 5h4l-3 5"/>'
+  };
+  function kind(c,day){
+    if(c===0)return day?"sun":"moon";
+    if(c<=2)return day?"part":"cloud";
+    if(c===3)return "cloud";
+    if(c===45||c===48)return "fog";
+    if(c>=51&&c<=57)return "drizzle";
+    if((c>=61&&c<=67)||(c>=80&&c<=82))return "rain";
+    if((c>=71&&c<=77)||c===85||c===86)return "snow";
+    if(c>=95)return "storm";
+    return "cloud";
+  }
+  function setW(k,t){
+    $("weather").innerHTML='<span class="wi"><svg viewBox="0 0 24 24" aria-hidden="true">'+P[k]+'</svg></span><span class="wt">'+t+'°</span>';
+  }
+  function loadWeather(){
+    if(demo){setW("sun",18);weatherAt=Date.now();return}
+    if(!pos)return;
+    weatherAt=Date.now();
+    fetch("https://api.open-meteo.com/v1/forecast?latitude="+pos.lat.toFixed(3)+"&longitude="+pos.lon.toFixed(3)+"&current=temperature_2m,weather_code,is_day&timezone=auto")
+      .then(function(r){return r.json()})
+      .then(function(j){var c=j.current;setW(kind(c.weather_code,c.is_day),Math.round(c.temperature_2m))})
+      .catch(function(){weatherAt=Date.now()-540000});
+  }
+  if(demo)loadWeather();
+  setInterval(function(){if((pos||demo)&&Date.now()-weatherAt>600000)loadWeather()},30000);
+  /* gauge animation */
+  var s=0,last=performance.now(),next=last+3500;
+  var sp=$("speed"),arc=$("arc");
+  if(demo)target=85;
+  function frame(t){
+    var dt=Math.min((t-last)/1000,.05);last=t;
+    if(demo&&t>next){target=Math.random()<.3?5+Math.random()*20:25+Math.random()*120;next=t+3000+Math.random()*2500}
+    s+=(target-s)*(1-Math.exp(-dt*2.2));
+    if(Math.abs(target-s)<.05)s=target;
+    sp.textContent=Math.round(s);
+    var L=Math.min(s/200,1)*270*1.7453;
+    arc.style.strokeDasharray=L.toFixed(1)+" 700";
+    arc.style.strokeOpacity=L<2?0:1;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
