@@ -248,7 +248,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webk
   if(demo)setGps("ok");
   /* weather (Open-Meteo, no key) */
   var weatherAt=0;
-  var P={
+  var WI={
     sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     moon:'<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>',
     cloud:'<path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>',
@@ -271,7 +271,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webk
     return "cloud";
   }
   function setW(k,t){
-    $("weather").innerHTML='<span class="wi"><svg viewBox="0 0 24 24" aria-hidden="true">'+P[k]+'</svg></span><span class="wt">'+t+'°</span>';
+    $("weather").innerHTML='<span class="wi"><svg viewBox="0 0 24 24" aria-hidden="true">'+WI[k]+'</svg></span><span class="wt">'+t+'°</span>';
   }
   function loadWeather(){
     if(demo){setW("sun",18);weatherAt=Date.now();return}
