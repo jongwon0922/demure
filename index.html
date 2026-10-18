@@ -136,8 +136,8 @@ html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webk
   lock();
   document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")lock()});
   document.addEventListener("click",function(){if(!wl)lock()});
-  /* GPS */
-  var target=0,lastFix=0,prev=null,pos=null,denied=false,watchId=null;
+  /* GPS + motion-sensor fusion */
+  var pos=null,denied=false,watchId=null,lastFix=0,prev=null;
   var gpsEl=$("gps"),gpsTxt=$("gpstxt");
   function setGps(state,label){gpsEl.className="gps "+state;gpsTxt.textContent=label||"GPS"}
   function dist(a,b){
@@ -145,18 +145,93 @@ html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webk
     var h=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*r)*Math.cos(b.latitude*r)*Math.sin(dLon/2)*Math.sin(dLon/2);
     return 2*R*Math.asin(Math.sqrt(h));
   }
+  function norm(a){return Math.sqrt(a[0]*a[0]+a[1]*a[1]+a[2]*a[2])}
+  /* estimated speed (m/s) and its uncertainty */
+  var v=0,P=25,rejects=0,gpsPrev=null,stillT=0;
+  /* motion state */
+  var motionOn=false,lastMotion=0,aF=0,uLP=1,wLP=1,gLP=null,gRef=null;
+  var F=[0,0,0],calibrated=false,ahSum=[0,0,0],ahN=0;
+  function onMotion(e){
+    var u=e.acceleration,ag=e.accelerationIncludingGravity,r=e.rotationRate;
+    if(!u||u.x===null||u.x===undefined||!ag||ag.x===null)return;
+    var now=performance.now(),dt=lastMotion?Math.min((now-lastMotion)/1000,.1):.02;
+    lastMotion=now;
+    /* gravity direction: slow low-pass of the raw accelerometer */
+    var ga=1-Math.exp(-dt/1.5);
+    if(!gLP)gLP=[ag.x,ag.y,ag.z];
+    else{gLP[0]+=(ag.x-gLP[0])*ga;gLP[1]+=(ag.y-gLP[1])*ga;gLP[2]+=(ag.z-gLP[2])*ga}
+    var gn=norm(gLP);if(gn<4)return;
+    var gh=[gLP[0]/gn,gLP[1]/gn,gLP[2]/gn];
+    /* phone moved or rotated in its mount: forget the learned forward axis */
+    if(!gRef)gRef=gh;
+    else if(gh[0]*gRef[0]+gh[1]*gRef[1]+gh[2]*gRef[2]<0.9){gRef=gh;F=[0,0,0];calibrated=false;ahSum=[0,0,0];ahN=0}
+    /* horizontal part of the user acceleration */
+    var d=u.x*gh[0]+u.y*gh[1]+u.z*gh[2];
+    var ah=[u.x-d*gh[0],u.y-d*gh[1],u.z-d*gh[2]];
+    ahSum[0]+=ah[0];ahSum[1]+=ah[1];ahSum[2]+=ah[2];ahN++;
+    /* acceleration along the learned forward axis */
+    var Fn=norm(F),raw=0;
+    if(Fn>6){raw=(ah[0]*F[0]+ah[1]*F[1]+ah[2]*F[2])/Fn;calibrated=true}else calibrated=false;
+    raw=Math.max(-8,Math.min(8,raw));
+    aF+=(raw-aF)*(1-Math.exp(-dt/0.15));
+    /* stillness detectors (accelerometer + gyro) */
+    var wm=r?Math.sqrt((r.alpha||0)*(r.alpha||0)+(r.beta||0)*(r.beta||0)+(r.gamma||0)*(r.gamma||0))*Math.PI/180:1;
+    var a2=1-Math.exp(-dt/0.5);
+    uLP+=(norm(ah)-uLP)*a2;wLP+=(wm-wLP)*a2;
+  }
+  function startMotion(){
+    if(motionOn||demo)return;
+    var go=function(){window.addEventListener("devicemotion",onMotion);motionOn=true};
+    try{
+      if(typeof DeviceMotionEvent!=="undefined"&&typeof DeviceMotionEvent.requestPermission==="function"){
+        DeviceMotionEvent.requestPermission().then(function(r){if(r==="granted")go()}).catch(function(){});
+      }else if("DeviceMotionEvent" in window)go();
+    }catch(e){}
+  }
+  var asked=false;
+  function firstTap(){if(asked)return;asked=true;startMotion()}
+  document.addEventListener("click",firstTap);
+  document.addEventListener("touchend",firstTap);
   function onPos(p){
-    var c=p.coords,v=null;
+    var c=p.coords,t=p.timestamp/1000,acc=c.accuracy,z=null;
     denied=false;lastFix=Date.now();pos={lat:c.latitude,lon:c.longitude};
-    if(typeof c.speed==="number"&&isFinite(c.speed)&&c.speed>=0)v=c.speed*3.6;
-    else if(prev){var dt=(p.timestamp-prev.t)/1000;if(dt>0&&dt<10)v=dist(prev,c)/dt*3.6}
-    prev={lat:c.latitude,lon:c.longitude,t:p.timestamp};
-    target=(v===null||v<2)?0:v;
-    setGps(c.accuracy<=30?"ok":"weak");
     if(!weatherAt)loadWeather();
+    if(typeof c.speed==="number"&&isFinite(c.speed)&&c.speed>=0)z=c.speed;
+    else if(prev&&acc<=30){var dp=t-prev.t;if(dp>0.3&&dp<5)z=dist(prev,c)/dp}
+    prev={lat:c.latitude,lon:c.longitude,t:t};
+    setGps(acc<=30?"ok":"weak");
+    if(z===null||acc>50)return;                      /* bad fix: keep coasting */
+    var dtg=gpsPrev?t-gpsPrev.t:null;
+    if(gpsPrev&&dtg>0&&Math.abs(z-v)>3+10*Math.min(dtg,5)&&rejects<2){rejects++;return}  /* spike: ignore */
+    rejects=0;
+    /* learn the car's forward axis from GPS acceleration vs. sensed acceleration */
+    if(gpsPrev&&dtg>0.3&&dtg<3&&ahN>0){
+      var dvdt=(z-gpsPrev.v)/dtg;
+      if(Math.abs(dvdt)>0.6&&Math.abs(dvdt)<6){
+        var m=[ahSum[0]/ahN,ahSum[1]/ahN,ahSum[2]/ahN];
+        if(norm(m)>0.3){F[0]+=dvdt*m[0];F[1]+=dvdt*m[1];F[2]+=dvdt*m[2]}
+      }
+      F[0]*=.995;F[1]*=.995;F[2]*=.995;
+    }
+    ahSum=[0,0,0];ahN=0;
+    /* Kalman update */
+    var sg=.35+acc/25,R=sg*sg;
+    if(!gpsPrev||dtg>6){v=z;P=R}
+    else{var K=P/(P+R);v+=K*(z-v);P*=(1-K)}
+    if(v<0)v=0;
+    gpsPrev={v:z,t:t};
+  }
+  function predict(dt){
+    var imu=calibrated&&motionOn&&(performance.now()-lastMotion<500);
+    if(imu)v+=aF*dt;
+    P+=(imu?.6:3)*dt;
+    if(v<0)v=0;
+    /* standing still: sensors quiet and GPS speed low -> lock to zero */
+    var still=motionOn&&(performance.now()-lastMotion<500)&&uLP<.25&&wLP<.06;
+    if(still&&v<1){stillT+=dt;if(stillT>1.2){v=0;P=.2}}else stillT=0;
   }
   function onErr(e){
-    if(e.code===1){denied=true;target=0;setGps("bad","위치 권한 필요")}
+    if(e.code===1){denied=true;v=0;setGps("bad","위치 권한 필요")}
     else setGps("bad");
   }
   function startGps(){
@@ -168,7 +243,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webk
   gpsEl.addEventListener("click",startGps);
   setInterval(function(){
     if(demo||denied)return;
-    if(Date.now()-lastFix>6000){target=0;setGps("bad")}
+    if(Date.now()-lastFix>6000){v=0;P=25;gpsPrev=null;setGps("bad")}
   },1000);
   if(demo)setGps("ok");
   /* weather (Open-Meteo, no key) */
@@ -210,13 +285,18 @@ html,body{height:100%;background:var(--bg);color:var(--fg);overflow:hidden;-webk
   if(demo)loadWeather();
   setInterval(function(){if((pos||demo)&&Date.now()-weatherAt>600000)loadWeather()},30000);
   /* gauge animation */
-  var s=0,last=performance.now(),next=last+3500;
+  var s=0,last=performance.now(),next=last+3500,target=0;
   var sp=$("speed"),arc=$("arc");
   if(demo)target=85;
   function frame(t){
     var dt=Math.min((t-last)/1000,.05);last=t;
-    if(demo&&t>next){target=Math.random()<.3?5+Math.random()*20:25+Math.random()*120;next=t+3000+Math.random()*2500}
-    s+=(target-s)*(1-Math.exp(-dt*2.2));
+    if(demo){
+      if(t>next){target=Math.random()<.3?5+Math.random()*20:25+Math.random()*95;next=t+3000+Math.random()*2500}
+    }else{
+      predict(dt);
+      var k=v*3.6;target=k<1.5?0:k;
+    }
+    s+=(target-s)*(1-Math.exp(-dt*(demo?2.2:5)));
     if(Math.abs(target-s)<.05)s=target;
     sp.textContent=Math.round(s);
     var L=Math.min(s/200,1)*270*1.7453;
